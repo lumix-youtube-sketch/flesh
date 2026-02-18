@@ -290,34 +290,70 @@ const CATEGORIES = {
 };
 
 const REGIONS = {
-    moscow: { name: '🏰 Москва', keywords: ['москв', 'мэр', 'собянин', 'подмосков'] },
-    spb: { name: '⚓️ СПб', keywords: ['петербург', 'спб', 'ленобл', 'пулково'] },
-    nsk: { name: '❄️ Новосибирск', keywords: ['новосибирск', 'нсо'] },
-    ekb: { name: '⛰ Екатеринбург', keywords: ['екатеринбург', 'свердловск', 'свердловской области'] },
-    kzn: { name: '🕌 Казань', keywords: ['казань', 'татарстан'] },
-    nn: { name: '🏰 НН', keywords: ['нижний новгород', 'нижегородск'] },
-    chel: { name: '🚜 Челябинск', keywords: ['челябинск', 'южный урал'] },
-    rostov: { name: '⚓️ Ростов', keywords: ['ростов', 'ростовской области', 'дон'] },
-    vrn: { name: '🌳 Воронеж', keywords: ['воронеж', 'воронежской области'] }
+    moscow: { name: '🏰 Москва', keywords: ['москва', 'москве', 'москвы', 'московск', 'подмосков', 'собянин'] },
+    spb: { name: '⚓️ СПб', keywords: ['санкт-петербург', 'санкт петербург', 'петербург', 'спб', 'ленобл', 'ленинградск'] },
+    nsk: { name: '❄️ Новосибирск', keywords: ['новосибирск', 'новосибирске', 'новосибирской области', 'нсо'] },
+    ekb: { name: '⛰ Екатеринбург', keywords: ['екатеринбург', 'екатеринбурге', 'свердловск', 'свердловской области'] },
+    kzn: { name: '🕌 Казань', keywords: ['казань', 'казани', 'татарстан', 'татарстане'] },
+    nn: { name: '🏰 НН', keywords: ['нижний новгород', 'нижнем новгороде', 'нижегородск', 'нижегородской области'] },
+    chel: { name: '🚜 Челябинск', keywords: ['челябинск', 'челябинске', 'челябинской области', 'южный урал'] },
+    rostov: { name: '⚓️ Ростов', keywords: ['ростов-на-дону', 'ростов на дону', 'ростовской области', 'ростове', 'дон'] },
+    vrn: { name: '🌳 Воронеж', keywords: ['воронеж', 'воронеже', 'воронежской области'] }
 };
 
 const REGION_BACKBONE_SOURCES = [
     { u: 'https://tass.ru/rss/v2.xml', n: 'ТАСС Регионы' },
     { u: 'https://ria.ru/export/rss2/archive/index.xml', n: 'РИА Регионы' },
-    { u: 'https://rssexport.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Регионы' }
+    { u: 'https://rssexport.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Регионы' },
+    { u: 'https://lenta.ru/rss', n: 'Lenta Регионы' },
+    { u: 'https://www.gazeta.ru/export/rss/lenta.xml', n: 'Газета.Ru Регионы' }
 ];
+
+const normalizeText = value => (value || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const hasTestWord = item => {
+    const haystack = normalizeText([
+        item?.title,
+        item?.contentSnippet,
+        item?.content,
+        item?.summary
+    ].filter(Boolean).join(' '));
+
+    return /(^|\s)тест(\s|$)/i.test(haystack);
+};
 
 const isItemMatchingRegion = (item, keywords = []) => {
     if (!keywords.length) return false;
 
-    const haystack = [
+    const haystack = normalizeText([
         item.title,
         item.contentSnippet,
         item.content,
         item.summary
-    ].filter(Boolean).join(' ').toLowerCase();
+    ].filter(Boolean).join(' '));
 
-    return keywords.some(k => haystack.includes(k.toLowerCase()));
+    return keywords.some(k => haystack.includes(normalizeText(k)));
+};
+
+const isLowQualityText = text => {
+    if (!text) return true;
+
+    const lines = text
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean);
+
+    if (!lines.length) return true;
+
+    const punctuationCount = (text.match(/[.!?…]/g) || []).length;
+    const shortHeadlineLines = lines.filter(line => line.length <= 120 && !/[.!?…]/.test(line)).length;
+
+    return lines.length >= 5 && punctuationCount < 2 && shortHeadlineLines >= Math.ceil(lines.length * 0.6);
 };
 
 
@@ -362,10 +398,12 @@ const Ingester = {
                     paragraphs.push(t);
             });
 
+            const scrapedText = paragraphs.join('\n\n');
+
             return {
                 img: normalizeMediaUrl(img, url),
                 video: normalizeMediaUrl(video, url),
-                text: paragraphs.join('\n\n')
+                text: isLowQualityText(scrapedText) ? null : scrapedText
             };
 
         } catch {
@@ -432,14 +470,16 @@ const Ingester = {
                             item.contentSnippet || item.content || item.summary || ''
                         );
 
-                        if (!image && !video) continue;
-                        if (!body) continue;
+                        const forcedByTestWord = hasTestWord(item);
+
+                        if (!forcedByTestWord && !image && !video) continue;
+                        if (!forcedByTestWord && !body) continue;
 
                         if (Repo.saveNews({
                             hash,
                             title: item.title?.trim(),
-                            body,
-                            image,
+                            body: body || (item.contentSnippet || item.summary || item.title || '').slice(0, CONTENT_LIMITS.MAX_BODY),
+                            image: image || 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/No-Image-Placeholder.svg/640px-No-Image-Placeholder.svg.png',
                             video,
                             source: src.n,
                             cat: src.cat,
