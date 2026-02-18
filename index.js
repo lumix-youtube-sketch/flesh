@@ -284,7 +284,7 @@ const CATEGORIES = {
         name: '✨ Тренды',
         urls: [
             { u: 'https://peopletalk.ru/feed/', n: 'PeopleTalk' },
-            { u: 'https://www.buro247.ru/rss/fashion.xml', n: 'Buro 24/7' }
+            { u: 'https://www.spletnik.ru/rss.xml', n: 'Spletnik' }
         ]
     }
 };
@@ -306,7 +306,7 @@ const REGION_BACKBONE_SOURCES = [
     { u: 'https://ria.ru/export/rss2/archive/index.xml', n: 'РИА Регионы' },
     { u: 'https://rssexport.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Регионы' },
     { u: 'https://lenta.ru/rss', n: 'Lenta Регионы' },
-    { u: 'https://www.gazeta.ru/export/rss/lenta.xml', n: 'Газета.Ru Регионы' }
+    { u: 'https://aif.ru/rss/all.php', n: 'АиФ Регионы' }
 ];
 
 const normalizeText = value => (value || '')
@@ -348,12 +348,26 @@ const isLowQualityText = text => {
         .map(l => l.trim())
         .filter(Boolean);
 
+    const paragraphs = text
+        .split(/\n{2,}/)
+        .map(p => p.trim())
+        .filter(Boolean);
+
     if (!lines.length) return true;
 
     const punctuationCount = (text.match(/[.!?…]/g) || []).length;
     const shortHeadlineLines = lines.filter(line => line.length <= 120 && !/[.!?…]/.test(line)).length;
 
-    return lines.length >= 5 && punctuationCount < 2 && shortHeadlineLines >= Math.ceil(lines.length * 0.6);
+    const avgParagraphLength = paragraphs.length
+        ? Math.round(paragraphs.reduce((acc, p) => acc + p.length, 0) / paragraphs.length)
+        : 0;
+
+    const headlineListLike =
+        paragraphs.length >= 4 &&
+        punctuationCount <= 2 &&
+        avgParagraphLength <= 150;
+
+    return headlineListLike || (lines.length >= 5 && punctuationCount < 2 && shortHeadlineLines >= Math.ceil(lines.length * 0.6));
 };
 
 
@@ -417,6 +431,7 @@ const Ingester = {
         let added = 0;
         const sources = [];
         const feedCache = new Map();
+        const feedErrorCache = new Map();
         const detailsCache = new Map();
 
         Object.keys(CATEGORIES)
@@ -441,11 +456,15 @@ const Ingester = {
 
             await Promise.all(chunk.map(async src => {
                 try {
-                    let feed = feedCache.get(src.u);
-                    if (!feed) {
-                        feed = await retry(() => this.parser.parseURL(src.u));
-                        feedCache.set(src.u, feed);
+                    if (feedErrorCache.has(src.u)) return;
+
+                    let feedPromise = feedCache.get(src.u);
+                    if (!feedPromise) {
+                        feedPromise = retry(() => this.parser.parseURL(src.u));
+                        feedCache.set(src.u, feedPromise);
                     }
+
+                    const feed = await feedPromise;
 
                     for (const item of (feed.items || []).slice(0, 14)) {
                         if (src.reg && src.keywords && !isItemMatchingRegion(item, src.keywords)) continue;
@@ -489,6 +508,8 @@ const Ingester = {
                     }
 
                 } catch (e) {
+                    if (feedErrorCache.has(src.u)) return;
+                    feedErrorCache.set(src.u, true);
                     logger.warn({ err: e?.message, url: src.u }, 'RSS fail');
                 }
             }));
