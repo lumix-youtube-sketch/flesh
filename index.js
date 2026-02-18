@@ -102,6 +102,17 @@ const cleanBodyText = (raw, title = '') => {
     return parts.join('\n\n').trim();
 };
 
+const isRussianText = (value, minCyrillicRatio = 0.45) => {
+    const text = (value || '').replace(/\s+/g, ' ').trim();
+    if (!text) return false;
+
+    const letters = text.match(/[A-Za-zА-Яа-яЁё]/g) || [];
+    if (!letters.length) return false;
+
+    const cyr = text.match(/[А-Яа-яЁё]/g) || [];
+    return (cyr.length / letters.length) >= minCyrillicRatio;
+};
+
 const extractMediaFromItem = item => {
     const possibleImage = [
         item.enclosure?.url,
@@ -599,6 +610,10 @@ const Ingester = {
                             item.contentSnippet || item.content || item.summary || ''
                         );
 
+                        const finalBody = body || (item.contentSnippet || item.summary || item.title || '').slice(0, CONTENT_LIMITS.MAX_BODY);
+                        const russianEnough = isRussianText(item.title, 0.5) && isRussianText(finalBody, 0.5);
+                        if (!russianEnough) continue;
+
                         const forcedByTestWord = hasTestWord(item);
 
                         if (!forcedByTestWord && !src.reg && !image && !video) continue;
@@ -607,7 +622,7 @@ const Ingester = {
                         if (Repo.saveNews({
                             hash,
                             title: item.title?.trim(),
-                            body: body || (item.contentSnippet || item.summary || item.title || '').slice(0, CONTENT_LIMITS.MAX_BODY),
+                            body: finalBody,
                             image: image || ((forcedByTestWord || src.reg) ? 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/No-Image-Placeholder.svg/640px-No-Image-Placeholder.svg.png' : null),
                             video,
                             source: src.n,
@@ -740,6 +755,11 @@ async function sendOne(ctx) {
 
     if (!news)
         return ctx.answerCbQuery('📭 Пока пусто', { show_alert: true });
+
+    if (!isRussianText(news.title, 0.5) || !isRussianText(news.body, 0.5)) {
+        Repo.markSeen(user.id, news.id, news.source_name);
+        return sendOne(ctx);
+    }
 
     const body = news.body.length > CONTENT_LIMITS.MAX_BODY
         ? `${news.body.slice(0, CONTENT_LIMITS.MAX_BODY - 1).trimEnd()}…`
