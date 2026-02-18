@@ -22,7 +22,14 @@ const CONFIG = {
     CONCURRENCY: 5,
     NEWS_TTL_DAYS: 3,
     RETRIES: 2,
-    USER_AGENT: 'Mozilla/5.0 Chrome/121'
+    USER_AGENT: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
+};
+
+const REQUEST_HEADERS = {
+    'User-Agent': CONFIG.USER_AGENT,
+    'Accept': 'application/rss+xml, application/xml;q=0.9, text/xml;q=0.8, text/html;q=0.7, */*;q=0.5',
+    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Cache-Control': 'no-cache'
 };
 
 const CONTENT_LIMITS = {
@@ -253,7 +260,7 @@ const CATEGORIES = {
         name: '⚡️ Молнии',
         urls: [
             { u: 'https://tass.ru/rss/v2.xml', n: 'ТАСС' },
-            { u: 'https://www.kommersant.ru/RSS/main.xml', n: 'Коммерсантъ' },
+            { u: 'https://www.vedomosti.ru/rss/news', n: 'Ведомости' },
             { u: 'https://rssexport.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК' },
             { u: 'https://ria.ru/export/rss2/archive/index.xml', n: 'РИА' }
         ]
@@ -277,28 +284,42 @@ const CATEGORIES = {
         name: '✨ Тренды',
         urls: [
             { u: 'https://peopletalk.ru/feed/', n: 'PeopleTalk' },
-            { u: 'https://style.rbc.ru/rss/style/', n: 'РБК Стиль' }
+            { u: 'https://www.buro247.ru/rss/fashion.xml', n: 'Buro 24/7' }
         ]
     }
 };
 
 const REGIONS = {
-    moscow: { name: '🏰 Москва', query: 'Москва', u: 'https://www.m24.ru/rss.xml', n: 'М24' },
-    spb: { name: '⚓️ СПб', query: 'Санкт-Петербург', u: 'https://spb.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК СПб' },
-    nsk: { name: '❄️ Новосибирск', query: 'Новосибирск', u: 'https://nsk.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Нск' },
-    ekb: { name: '⛰ Екатеринбург', query: 'Екатеринбург', u: 'https://ekb.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Екб' },
-    kzn: { name: '🕌 Казань', query: 'Казань', u: 'https://rt.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Татарстан' },
-    nn: { name: '🏰 НН', query: 'Нижний Новгород', u: 'https://nn.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК НН' },
-    chel: { name: '🚜 Челябинск', query: 'Челябинск', u: 'https://chel.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Чел' },
-    rostov: { name: '⚓️ Ростов', query: 'Ростов-на-Дону', u: 'https://rostov.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Ростов' },
-    vrn: { name: '🌳 Воронеж', query: 'Воронеж', u: 'https://vrn.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Воронеж' }
+    moscow: { name: '🏰 Москва', keywords: ['москв', 'мэр', 'собянин', 'подмосков'] },
+    spb: { name: '⚓️ СПб', keywords: ['петербург', 'спб', 'ленобл', 'пулково'] },
+    nsk: { name: '❄️ Новосибирск', keywords: ['новосибирск', 'нсо'] },
+    ekb: { name: '⛰ Екатеринбург', keywords: ['екатеринбург', 'свердловск', 'свердловской области'] },
+    kzn: { name: '🕌 Казань', keywords: ['казань', 'татарстан'] },
+    nn: { name: '🏰 НН', keywords: ['нижний новгород', 'нижегородск'] },
+    chel: { name: '🚜 Челябинск', keywords: ['челябинск', 'южный урал'] },
+    rostov: { name: '⚓️ Ростов', keywords: ['ростов', 'ростовской области', 'дон'] },
+    vrn: { name: '🌳 Воронеж', keywords: ['воронеж', 'воронежской области'] }
 };
 
+const REGION_BACKBONE_SOURCES = [
+    { u: 'https://tass.ru/rss/v2.xml', n: 'ТАСС Регионы' },
+    { u: 'https://ria.ru/export/rss2/archive/index.xml', n: 'РИА Регионы' },
+    { u: 'https://rssexport.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Регионы' }
+];
 
-const buildGoogleRegionRss = regionQuery => {
-    const q = encodeURIComponent(`${regionQuery} новости`);
-    return `https://news.google.com/rss/search?q=${q}&hl=ru&gl=RU&ceid=RU:ru`;
+const isItemMatchingRegion = (item, keywords = []) => {
+    if (!keywords.length) return false;
+
+    const haystack = [
+        item.title,
+        item.contentSnippet,
+        item.content,
+        item.summary
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return keywords.some(k => haystack.includes(k.toLowerCase()));
 };
+
 
 // ---------------- INGESTER ----------------
 
@@ -306,7 +327,7 @@ const Ingester = {
 
     parser: new RSSParser({
         timeout: CONFIG.RSS_TIMEOUT,
-        headers: { 'User-Agent': CONFIG.USER_AGENT }
+        headers: REQUEST_HEADERS
     }),
 
     async scrape(url, title) {
@@ -314,7 +335,7 @@ const Ingester = {
             const { data } = await retry(() =>
                 axios.get(url, {
                     timeout: CONFIG.SCRAPE_TIMEOUT,
-                    headers: { 'User-Agent': CONFIG.USER_AGENT }
+                    headers: REQUEST_HEADERS
                 })
             );
 
@@ -353,10 +374,12 @@ const Ingester = {
     },
 
     async run() {
-        logger.info('Ingester: цикл сбора');
+        logger.info('Ingester cycle started');
 
         let added = 0;
         const sources = [];
+        const feedCache = new Map();
+        const detailsCache = new Map();
 
         Object.keys(CATEGORIES)
             .forEach(k => CATEGORIES[k].urls.forEach(u =>
@@ -366,16 +389,12 @@ const Ingester = {
         Object.keys(REGIONS)
             .forEach(k => {
                 const region = REGIONS[k];
-                const regionSources = [
-                    { u: region.u, n: region.n },
-                    { u: buildGoogleRegionRss(region.query || region.name), n: `${region.n} (Google)` }
-                ];
 
-                regionSources.forEach(src => sources.push({
-                    u: src.u,
-                    n: src.n,
+                REGION_BACKBONE_SOURCES.forEach(src => sources.push({
+                    ...src,
                     cat: null,
-                    reg: k
+                    reg: k,
+                    keywords: region.keywords
                 }));
             });
 
@@ -384,15 +403,26 @@ const Ingester = {
 
             await Promise.all(chunk.map(async src => {
                 try {
-                    const feed = await retry(() => this.parser.parseURL(src.u));
+                    let feed = feedCache.get(src.u);
+                    if (!feed) {
+                        feed = await retry(() => this.parser.parseURL(src.u));
+                        feedCache.set(src.u, feed);
+                    }
 
-                    for (const item of (feed.items || []).slice(0, 10)) {
+                    for (const item of (feed.items || []).slice(0, 14)) {
+                        if (src.reg && src.keywords && !isItemMatchingRegion(item, src.keywords)) continue;
+                        if (!item.link || !item.title) continue;
+
                         const hash = crypto
                             .createHash('md5')
                             .update(item.link + item.title)
                             .digest('hex');
 
-                        const details = await this.scrape(item.link, item.title);
+                        let details = detailsCache.get(item.link);
+                        if (!details) {
+                            details = await this.scrape(item.link, item.title);
+                            detailsCache.set(item.link, details);
+                        }
                         const fallbackMedia = extractMediaFromItem(item);
                         const image = details.img || fallbackMedia.img;
                         const video = details.video || fallbackMedia.video;
@@ -424,7 +454,7 @@ const Ingester = {
             }));
         }
 
-        logger.info(`Ingester: +${added} новостей`);
+        logger.info(`Ingester added +${added} items`);
     }
 };
 
@@ -615,7 +645,7 @@ cron.schedule('0 4 * * *', () => {
 // ---------------- START ----------------
 
 (async () => {
-    logger.info('Flash News запуск');
+    logger.info('Flash News started');
 
     await Ingester.run();
     await bot.launch();
