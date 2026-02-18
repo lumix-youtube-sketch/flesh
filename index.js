@@ -25,6 +25,12 @@ const CONFIG = {
     USER_AGENT: 'Mozilla/5.0 Chrome/121'
 };
 
+const CONTENT_LIMITS = {
+    MIN_BODY: 320,
+    MAX_BODY: 1200,
+    PARAGRAPHS_MAX: 8
+};
+
 const logger = pino({
     transport: { target: 'pino-pretty', options: { colorize: true } }
 });
@@ -46,6 +52,87 @@ async function retry(fn, retries = CONFIG.RETRIES) {
 const safeDate = d => {
     const t = new Date(d).getTime();
     return Number.isFinite(t) ? t : Date.now();
+};
+
+const normalizeMediaUrl = (candidate, baseUrl) => {
+    if (!candidate || typeof candidate !== 'string') return null;
+    const cleaned = candidate.trim();
+    if (!cleaned || cleaned.startsWith('data:')) return null;
+
+    try {
+        return new URL(cleaned, baseUrl).toString();
+    } catch {
+        return null;
+    }
+};
+
+const extractMediaFromItem = item => {
+    const possibleImage = [
+        item.enclosure?.url,
+        item['media:content']?.url,
+        item['media:thumbnail']?.url,
+        item.image?.url,
+        item.itunes?.image,
+        item.thumbnail
+    ];
+
+    const possibleVideo = [
+        item.video,
+        item.enclosure?.type?.startsWith('video/') ? item.enclosure?.url : null,
+        item['media:content']?.type?.startsWith('video/') ? item['media:content']?.url : null
+    ];
+
+    return {
+        img: possibleImage.map(v => normalizeMediaUrl(v, item.link)).find(Boolean) || null,
+        video: possibleVideo.map(v => normalizeMediaUrl(v, item.link)).find(Boolean) || null
+    };
+};
+
+const buildNewsBody = (title, text, fallbackText) => {
+    const sanitize = value => (value || '')
+        .replace(/\s+/g, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .trim();
+
+    const splitBySentence = input => input
+        .split(/(?<=[.!?…])\s+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+
+    const textValue = sanitize(text);
+    const fallbackValue = sanitize(fallbackText);
+    const candidate = textValue.length > fallbackValue.length ? textValue : fallbackValue;
+
+    if (!candidate) return '';
+
+    let body = '';
+    const sentences = splitBySentence(candidate);
+
+    for (const sentence of sentences) {
+        const next = body ? `${body} ${sentence}` : sentence;
+        if (next.length > CONTENT_LIMITS.MAX_BODY) break;
+        body = next;
+    }
+
+    if (!body || body.length < CONTENT_LIMITS.MIN_BODY) {
+        body = candidate.slice(0, CONTENT_LIMITS.MAX_BODY);
+    }
+
+    body = body.trim();
+    if (!body) return '';
+
+    if (body.length < CONTENT_LIMITS.MIN_BODY && fallbackValue && fallbackValue !== body) {
+        const expanded = `${body} ${fallbackValue}`.slice(0, CONTENT_LIMITS.MAX_BODY).trim();
+        if (expanded.length > body.length) body = expanded;
+    }
+
+    if (body.length > CONTENT_LIMITS.MAX_BODY) {
+        body = `${body.slice(0, CONTENT_LIMITS.MAX_BODY - 1).trimEnd()}…`;
+    }
+
+    if (body.toLowerCase() === (title || '').trim().toLowerCase()) return '';
+
+    return body;
 };
 
 // ---------------- DATABASE ----------------
@@ -196,15 +283,21 @@ const CATEGORIES = {
 };
 
 const REGIONS = {
-    moscow: { name: '🏰 Москва', u: 'https://www.m24.ru/rss.xml', n: 'М24' },
-    spb: { name: '⚓️ СПб', u: 'https://spb.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК СПб' },
-    nsk: { name: '❄️ Новосибирск', u: 'https://nsk.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Нск' },
-    ekb: { name: '⛰ Екатеринбург', u: 'https://ekb.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Екб' },
-    kzn: { name: '🕌 Казань', u: 'https://rt.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Татарстан' },
-    nn: { name: '🏰 НН', u: 'https://nn.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК НН' },
-    chel: { name: '🚜 Челябинск', u: 'https://chel.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Чел' },
-    rostov: { name: '⚓️ Ростов', u: 'https://rostov.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Ростов' },
-    vrn: { name: '🌳 Воронеж', u: 'https://vrn.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Воронеж' }
+    moscow: { name: '🏰 Москва', query: 'Москва', u: 'https://www.m24.ru/rss.xml', n: 'М24' },
+    spb: { name: '⚓️ СПб', query: 'Санкт-Петербург', u: 'https://spb.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК СПб' },
+    nsk: { name: '❄️ Новосибирск', query: 'Новосибирск', u: 'https://nsk.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Нск' },
+    ekb: { name: '⛰ Екатеринбург', query: 'Екатеринбург', u: 'https://ekb.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Екб' },
+    kzn: { name: '🕌 Казань', query: 'Казань', u: 'https://rt.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Татарстан' },
+    nn: { name: '🏰 НН', query: 'Нижний Новгород', u: 'https://nn.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК НН' },
+    chel: { name: '🚜 Челябинск', query: 'Челябинск', u: 'https://chel.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Чел' },
+    rostov: { name: '⚓️ Ростов', query: 'Ростов-на-Дону', u: 'https://rostov.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Ростов' },
+    vrn: { name: '🌳 Воронеж', query: 'Воронеж', u: 'https://vrn.rbc.ru/rbcnews/news/30/full.rss', n: 'РБК Воронеж' }
+};
+
+
+const buildGoogleRegionRss = regionQuery => {
+    const q = encodeURIComponent(`${regionQuery} новости`);
+    return `https://news.google.com/rss/search?q=${q}&hl=ru&gl=RU&ceid=RU:ru`;
 };
 
 // ---------------- INGESTER ----------------
@@ -229,22 +322,33 @@ const Ingester = {
 
             let img =
                 $('meta[property="og:image"]').attr('content') ||
+                $('meta[name="twitter:image"]').attr('content') ||
                 $('article img').first().attr('src');
 
             const bad = ['logo', 'favicon', 'social', 'share'];
             if (img && bad.some(p => img.toLowerCase().includes(p))) img = null;
 
+            const video =
+                $('meta[property="og:video"]').attr('content') ||
+                $('video source').first().attr('src') ||
+                $('video').first().attr('src') ||
+                null;
+
             let paragraphs = [];
             $('article p, .article__text p, p').each((i, el) => {
                 const t = $(el).text().trim();
-                if (t.length > 60 && t !== title && paragraphs.length < 4)
+                if (t.length > 60 && t !== title && paragraphs.length < CONTENT_LIMITS.PARAGRAPHS_MAX)
                     paragraphs.push(t);
             });
 
-            return { img, text: paragraphs.join('\n\n') };
+            return {
+                img: normalizeMediaUrl(img, url),
+                video: normalizeMediaUrl(video, url),
+                text: paragraphs.join('\n\n')
+            };
 
         } catch {
-            return { img: null, text: null };
+            return { img: null, video: null, text: null };
         }
     },
 
@@ -260,12 +364,20 @@ const Ingester = {
             ));
 
         Object.keys(REGIONS)
-            .forEach(k => sources.push({
-                u: REGIONS[k].u,
-                n: REGIONS[k].n,
-                cat: null,
-                reg: k
-            }));
+            .forEach(k => {
+                const region = REGIONS[k];
+                const regionSources = [
+                    { u: region.u, n: region.n },
+                    { u: buildGoogleRegionRss(region.query || region.name), n: `${region.n} (Google)` }
+                ];
+
+                regionSources.forEach(src => sources.push({
+                    u: src.u,
+                    n: src.n,
+                    cat: null,
+                    reg: k
+                }));
+            });
 
         for (let i = 0; i < sources.length; i += CONFIG.CONCURRENCY) {
             const chunk = sources.slice(i, i + CONFIG.CONCURRENCY);
@@ -281,14 +393,24 @@ const Ingester = {
                             .digest('hex');
 
                         const details = await this.scrape(item.link, item.title);
-                        if (!details.img) continue;
+                        const fallbackMedia = extractMediaFromItem(item);
+                        const image = details.img || fallbackMedia.img;
+                        const video = details.video || fallbackMedia.video;
+                        const body = buildNewsBody(
+                            item.title,
+                            details.text,
+                            item.contentSnippet || item.content || item.summary || ''
+                        );
+
+                        if (!image && !video) continue;
+                        if (!body) continue;
 
                         if (Repo.saveNews({
                             hash,
                             title: item.title?.trim(),
-                            body: details.text || '',
-                            image: details.img,
-                            video: null,
+                            body,
+                            image,
+                            video,
                             source: src.n,
                             cat: src.cat,
                             reg: src.reg,
@@ -297,7 +419,7 @@ const Ingester = {
                     }
 
                 } catch (e) {
-                    logger.warn('RSS fail', src.u);
+                    logger.warn({ err: e?.message, url: src.u }, 'RSS fail');
                 }
             }));
         }
@@ -384,8 +506,24 @@ bot.action(/toggle_reg_(.+)/, ctx => {
 
     STMT.updateRegs.run(JSON.stringify(user.regions), user.id);
 
+    const btns = Object.keys(REGIONS).map(k => [
+        Markup.button.callback(
+            `${user.regions.includes(k) ? '✅' : '⬜'} ${REGIONS[k].name}`,
+            `toggle_reg_${k}`
+        )
+    ]);
+
+    btns.push([Markup.button.callback('⬅️ Назад', 'back_main')]);
+
     ctx.answerCbQuery();
-    ctx.action('menu_reg');
+    ctx.editMessageText('Выберите регионы:',
+        Markup.inlineKeyboard(btns)).catch(() => {});
+});
+
+bot.action('back_main', ctx => {
+    const user = Repo.getUser(ctx.from.id);
+    ctx.answerCbQuery();
+    ctx.editMessageText('Настройте интересы:', getMenu(user)).catch(() => {});
 });
 
 // send news
@@ -401,22 +539,67 @@ async function sendOne(ctx) {
     if (!news)
         return ctx.answerCbQuery('📭 Пока пусто', { show_alert: true });
 
+    const body = news.body.length > CONTENT_LIMITS.MAX_BODY
+        ? `${news.body.slice(0, CONTENT_LIMITS.MAX_BODY - 1).trimEnd()}…`
+        : news.body;
+
+    const caption = `<b>${news.title}</b>
+
+${body}
+
+🔹 <i>${news.source_name}</i>`;
+
+    const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🔄 Еще', 'next')]
+    ]).reply_markup;
+
     try {
-        await ctx.replyWithPhoto(news.image_url, {
-            caption: `<b>${news.title}</b>\n\n${news.body.slice(0,850)}...\n\n🔹 <i>${news.source_name}</i>`,
-            parse_mode: 'HTML',
-            reply_markup: Markup.inlineKeyboard([
-                [Markup.button.callback('🔄 Еще', 'next')]
-            ]).reply_markup
-        });
+        if (news.video_url) {
+            await ctx.replyWithVideo(news.video_url, {
+                caption,
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        } else {
+            await ctx.replyWithPhoto(news.image_url, {
+                caption,
+                parse_mode: 'HTML',
+                reply_markup: keyboard
+            });
+        }
 
         Repo.markSeen(user.id, news.id);
 
     } catch {
+        try {
+            if (news.image_url) {
+                await ctx.replyWithPhoto(news.image_url, {
+                    caption,
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+                Repo.markSeen(user.id, news.id);
+                return;
+            }
+        } catch {}
+
+        try {
+            if (news.video_url) {
+                await ctx.replyWithVideo(news.video_url, {
+                    caption,
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+                Repo.markSeen(user.id, news.id);
+                return;
+            }
+        } catch {}
+
         Repo.markSeen(user.id, news.id);
         return sendOne(ctx);
     }
 }
+
 
 // ---------------- CRON ----------------
 
