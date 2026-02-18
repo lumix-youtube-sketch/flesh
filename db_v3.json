@@ -1,0 +1,35 @@
+{
+  "users": [
+    {
+      "id": 6984451185,
+      "categories": [
+        "world",
+        "games",
+        "movies"
+      ],
+      "limit": 6,
+      "history": [
+        "27c069158c0e857363bc5bc536fce381",
+        "8d1956e1ade89566c0dbd15cd88209d9",
+        "b5008d853802caccd81faf60f745e5c8"
+      ]
+    },
+    {
+      "id": 1792666312,
+      "categories": [
+        "world",
+        "games",
+        "movies",
+        "tech",
+        "auto",
+        "science"
+      ],
+      "limit": 3,
+      "history": [
+        "aa6a8ba3c5259d0b8bd6e788bb10accd",
+        "b499a701ad166ef2dd008921d536b466",
+        "27c069158c0e857363bc5bc536fce381"
+      ]
+    }
+  ]
+}

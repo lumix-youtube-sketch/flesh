@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "id": 7652551403,
+      "categories": [
+        "world",
+        "games",
+        "tech",
+        "science"
+      ],
+      "maxCount": 5,
+      "interval": 24,
+      "history": [
+        "f00aa96755c3b25ac8d45f40180d59df",
+        "b83ecf26405ebddea374035b2865efff",
+        "864e94c70e25bfb77634dfddcaa296d8",
+        "1a28f83e679f910273dfbcf635185f93",
+        "8f405389be3ca44555af16194c8a2673"
+      ]
+    }
+  ]
+}

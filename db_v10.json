@@ -1,0 +1,26 @@
+{
+  "users": [
+    {
+      "id": 1792666312,
+      "categories": [
+        "fashion_trends"
+      ],
+      "regions": [],
+      "history": [
+        "65b8aa5c4dae904a46765777dc073d92",
+        "d389ce60b8b18174040fea0fb7495953",
+        "5dcb015f1692461c415d79116199577b",
+        "de0f5b90a9ac75968d8419aedb332727",
+        "fff32e92a801980c4cb12bc7cb55ed8f",
+        "ce7a3388c92482798770767f8f5f84dc",
+        "f712202157ca1b365fe13ae941381215",
+        "3070ca84d6f7031b0c0f9754138bd8c3",
+        "72569831cae9b35fdb2f05306c305b45",
+        "291c4af3558bc21983320d9548379747",
+        "1ff12e0d42fead7c7467869bc5ed15aa",
+        "ecbda38f06a78ecf840e824d49523144",
+        "1424d1c11206d16460af4ebdd1b971ea"
+      ]
+    }
+  ]
+}

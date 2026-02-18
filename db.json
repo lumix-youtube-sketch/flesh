@@ -1,0 +1,40 @@
+{
+  "users": [
+    {
+      "id": 1792666312,
+      "categories": [
+        "games",
+        "tech",
+        "science",
+        "world",
+        "top",
+        "movies",
+        "auto"
+      ],
+      "lastCheck": 1771166451037,
+      "maxNews": 4,
+      "history": [
+        "https://stopgame.ru/show/158155/podkost_klonirovanie_i_odinochestvo",
+        "https://stopgame.ru/show/158154/darkwatch_ohotimsya_na_nezhit_shuterok_pod_kofeek",
+        "https://stopgame.ru/show/158153/asylum_zhestko_pugaemsya_v_pyatnicu_13_go",
+        "https://stopgame.ru/show/158124/reanimal_zdorovennyy_koshmar",
+        "https://habr.com/ru/articles/996744/?utm_source=habrahabr&utm_medium=rss&utm_campaign=996744",
+        "https://habr.com/ru/articles/996754/?utm_source=habrahabr&utm_medium=rss&utm_campaign=996754",
+        "https://habr.com/ru/articles/996752/?utm_source=habrahabr&utm_medium=rss&utm_campaign=996752",
+        "https://habr.com/ru/articles/996748/?utm_source=habrahabr&utm_medium=rss&utm_campaign=996748",
+        "https://naked-science.ru/article/cosmonautics/vozdushnye-kosmicheskie-d",
+        "https://naked-science.ru/article/astronomy/kolets-saturna-i-giperion",
+        "https://naked-science.ru/article/astronomy/tihie-chernye-dyry-okazal",
+        "https://naked-science.ru/article/physics/magic-from-all-principles",
+        "https://tass.ru/sport/26454409",
+        "https://tass.ru/mezhdunarodnaya-panorama/26454399",
+        "https://tass.ru/mezhdunarodnaya-panorama/26454389",
+        "https://tass.ru/proisshestviya/26454395",
+        "https://www.rbc.ru/sport/15/02/2026/6991d2199a79476ed96a61ab",
+        "https://www.rbc.ru/sport/15/02/2026/6991c9a69a79473992d293cd",
+        "https://www.rbc.ru/politics/15/02/2026/6991a8419a794703a293699c",
+        "https://www.rbc.ru/sport/15/02/2026/6991c6a39a794775eb0b0631"
+      ]
+    }
+  ]
+}

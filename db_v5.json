@@ -1,0 +1,35 @@
+{
+  "users": [
+    {
+      "id": 1792666312,
+      "categories": [
+        "auto"
+      ],
+      "history": [
+        "7c0d03a7c243eb9a17c29c602727a063",
+        "66dc6ac232fe1ef64e7c37cba1fb336f",
+        "382127dd00e837c8714d08a519ce92de",
+        "fbff4d0c08f44fd1baafe01f91a3fc79",
+        "46b39cb2c149e18d2b6a8676fd301857",
+        "71c10b03524cb87e484c75dae524681c",
+        "93c56591d37edf48ddf2e44eb157c789",
+        "2b4d8d70eb62b84fdb9500d794a76dc6",
+        "e10bcaf9b2e56041a9e00d1e3f05b776",
+        "2f9971cbb6b68f0603501ab3c1ce3bec"
+      ]
+    },
+    {
+      "id": 7652551403,
+      "categories": [
+        "world"
+      ],
+      "history": [
+        "f0fc233b4a6902d974e0a6ce12425a2b",
+        "4e1d60809557cd3466c35d836dc7a1cd",
+        "6b11b21ba38cf04a743a654b19e0d7ff",
+        "84a956f9f0a83982442adf3779c76b6e",
+        "6d6f6cdd3c36f3b049577ba731c2cbad"
+      ]
+    }
+  ]
+}
